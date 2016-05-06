@@ -1,0 +1,246 @@
+
+1. OpenFiles1
+2. ReadImages1
+3. GetFromProcpar*
+
+***OpenFiles1.m
+variables needed from procpar:
+ sfrq
+ theta
+ psi
+ phi
+ pss0
+ lpe
+ nv
+ ns
+ thk
+ gap
+ b0delay
+ b0times
+ np
+ rcvrs
+ seqcon  just need third entry set to 's' or not for proper EncodeTable val
+
+
+***ReadImages1.m
+variables from procpar
+if encodetable = 1
+ npe1
+ npe2
+but we are using encodetable = 0
+
+		[reads,res,rcvrs,slices,B0s,oversample] = GetInformation(imagetype);
+		totreads = 2*reads;  % res in readout dir * 2 for complex?
+		pevalues = zeros(1,res);
+		data = zeros(totreads,res,rcvrs,slices,B0s);
+		
+		for a=1:res   % why not pevalues = 1:res ???
+			pevalues(a) = a;
+		end
+		
+		if (encodetable==0)  % unpack and repack data...
+			stripheader(fp1,1); % chop 32 bytes
+			
+			for a=1:res 
+				
+				for d=1:rcvrs % rcvrs will be 1
+					
+					stripheader(fp1,2); % chop 28 bytes
+					
+					for b=1:B0s
+						for c=1:slices
+							temp(1:totreads) = fread(fp1,totreads,'int');
+							data(1:totreads,a,d,c,b) = temp(1:totreads);
+						end
+					end
+				end
+			end
+		end
+ 
+ 
+so there will be 32 bytes followed by 'res' blocks
+each block will start with 28 bytes followed by 
+a trace for each slice for each B0: B01 s1 s2 s3... B02 s1 s2 s3... B03...
+each trace has np*2 ints
+
+that is:
+
+32 byte header
+28 byte header for res=1
+B0.1 slice 1 np*2 ints
+           2 np*2 ints
+           3 np*2 ints
+B0.2 slice 1 np*2 ints
+           2 np*2 ints
+           3 np*2 ints
+...
+
+
+
+ 
+***LoadCurrentShims.m
+ x1
+ y1
+ z1c
+ xz
+ yz
+ xy
+ x2y2
+ z2c
+ x3
+ y3
+ z3c
+ zxy
+ zx2y2
+ xz2
+ yz2
+ 
+***GetFromProcpar
+looks for tag then drops down one line.
+
+***from example t1map procpar:
+
+sfrq 1 1 1000000000 0 0 2 1 11 1 64
+1 400.5391732 
+0 
+theta 1 1 1000000 -1000000 0 2 1 8 1 64
+1 120.74 
+0 
+psi 1 1 1000000 -1000000 0 2 1 8 1 64
+1 318.33 
+0 
+phi 1 1 1000000 -1000000 0 2 1 8 1 64
+1 120.57 
+0 
+pss0 1 1 9.99999984307e+17 -9.99999984307e+17 0 2 1 0 1 64
+1 1.24 
+0 
+lpe 1 1 100 2 0 2 1 0 1 64
+1 19.2 
+0 
+nv 1 1 1000000 0 1 2 1 9 1 64
+1 1 
+0 
+ns 1 1 1000000 0 1 2 1 9 1 64
+1 1 
+0
+thk 1 1 1000000 -1000000 0 2 1 0 1 64
+1 2 
+0 
+gap 1 1 9.99999984307e+17 -9.99999984307e+17 0 2 1 0 1 64
+1 0 
+0
+b0delay 1 1 9.99999984307e+17 -9.99999984307e+17 0 2 1 0 1 64
+1 0.001 
+0 
+b0times 1 1 9.99999984307e+17 -9.99999984307e+17 0 2 1 0 1 64
+1 5 
+0 
+np 7 1 10000000 32 2 2 1 11 1 64
+1 8192 
+0 
+rcvrs 4 2 4 0 0 2 1 1 1 64
+1 "y"
+2 "n" "y" 
+seqcon 2 2 0 0 0 2 1 9 1 64
+1 "ccsnn"
+0 
+
+
+
+
+***seqcon
+Controls the status of various looping processes used during sequence acquisition.
+The nD, seqcon, plist, patlist, pwrlist, fliplist and sslist parameters configure a
+particular parameter set for an application sequence defined by the value of the
+seqfil parameter. String with five characters, consisting of the characters 'n',
+'s', and 'c', that control where and when the looping occurs: 
+• 'n' (null loop) specifies a sequence that has no such loop function. 
+• 's' (standard loop) sets the
+looping operation to occur during the execution of pulse sequence generation in the
+host computer. Each loop execution generates a new acode set for execution in the
+acquisition computer. Each acode set will ultimately give rise to its own data block
+in the FID file. A standard loop operation therefore lies outside the signal
+averaging (transient counter loop). Parameter arrays and use of the 2D implicit loop
+are standard loops. The multiecho loop cannot be a standard loop. 
+• 'c' (compressed loop) sets the looping operation to occur dynamically in the acquisition computer,
+and each loop execution generates a new data ìtraceî within the current data
+ìblockî. This requires space in the on-board HAL memory. Compressed loops lie
+inside the signal averaging loop. 
+• First character: multiecho looping. 
+• Second character: multislice looping. 
+• Third character: 2D phase encode loop. 
+• Fourth character: 3D phase encode loop. 
+• Fifth character: 4D phase encode loop.
+
+***fid file data format
+Data File Structures
+A data file header of 32 bytes is placed at the beginning of a VnmrJ data file. The
+header contains information about the number of blocks and their size. It is followed by one or more
+data blocks. At the beginning of each block, a data block header is stored, which contains information
+about the data within the individual block. A typical 1D data file, therefore, has the following form:
+data file header 
+
+header for block 1 
+data of block 1 
+header for block 2 
+data of block 2 
+... 
+The data
+headers allow for 2D hypercomplex data that may be phased in both the f1 and f2 directions. To
+accomplish this, the data block header has a second part for the 2D hypercomplex data. Also, the data
+file header, the data block header, and the data block header used with all data have been slightly
+revised. The new format allows processing of FIDs obtained with earlier versions of VnmrJ.The 2D
+hypercomplex data files with datafilehead.nbheaders=2 have the following structure: 
+data file header
+header for block 1 
+second header for block 1 
+data of block 1 
+header for block 2 
+second header for block
+2 
+data of block 2 
+... 
+All data in this file is contiguous. The byte following the 32nd byte in the file
+is expected to be the first byte of the first data block header. If more than one block is stored in a
+file, the first byte following the last byte of data is expected to be the first byte of the second data
+block header. Note that these data blocks are not disk blocks; rather, they are a complete data group,
+such as an individual trace in a experiment. For non-arrayed 1D experiments, only one block will be
+present in the file. Details of the data structures and constants involved can be found in the file
+data.h, which is provided as part of the VnmrJ source code license. The C specification of the file
+header is the following: 
+struct datafilehead /* Used at start of each data file (FIDs, spectra, 2D) */ 
+{ 
+long nblocks; /* number of blocks in file */ 
+long ntraces; /* number of traces per block */ 
+long np;      /* number of elements per trace */ 
+long ebytes;  /* number of bytes per element */ 
+long tbytes; 
+long bbytes; 
+short vers_id; 
+short status; 
+long nbheaders; 
+};
+
+
+/* number of bytes per trace */ 
+/* number ofbytes per block */ 
+/* software version, file_id status bits */ 
+/* status of whole file */ 
+/* number of block headers per block */ 
+
+The variables in datafilehead structure are set as follows: 
+• nblocks is the number of data blocks present in the file. 
+• ntraces is the number of traces in each block. 
+• np is the number of simple elements (16-bit integers, 32-bit integers, or 32-bit floating point numbers) in one
+trace. It is equal to twice the number of complex data points. 
+• ebytes is the number of bytes in one element, either 2 (for 16-bit integers in single precision FIDs) or 4 (for all others). 
+• tbytes is set to (np*ebytes). 
+• bbytes is set to (ntraces*tbytes + nbheaders*sizeof(struct datablockhead)). 
+
+The size of the datablockhead structure is 28 bytes. 
+
+• vers_id is the version identification of present VnmrJ. 
+• nbheaders is the number of block headers per data block. 
+• status is bits as defined below with their hexadecimal values. 
+All other bits must be zero. 
